@@ -8,7 +8,17 @@ use App\Services\SlugService;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Validator;
 
-Artisan::command('marketplace:create-admin {email} {--name=Super Admin} {--password=}', function (string $email) {
+Artisan::command('marketplace:create-admin {email?} {--name=} {--password=} {--skip-if-exists : Do nothing when a Super Admin already exists}', function () {
+    $superAdmins = User::query()->whereHas('role', fn ($q) => $q->where('slug', RoleName::SuperAdmin->value));
+
+    if ($this->option('skip-if-exists') && $superAdmins->exists()) {
+        $this->info('A Super Admin already exists: '.$superAdmins->value('email').' (skipped).');
+
+        return 0;
+    }
+
+    $email = $this->argument('email') ?: $this->ask('Super Admin email');
+    $name = $this->option('name') ?: $this->ask('Super Admin name', 'Super Admin');
     $password = $this->option('password') ?: $this->secret('Password (min. 8 characters, letters and numbers)');
 
     $validator = Validator::make(
@@ -24,7 +34,7 @@ Artisan::command('marketplace:create-admin {email} {--name=Super Admin} {--passw
         return 1;
     }
 
-    $user = new User(['name' => $this->option('name'), 'email' => $email, 'password' => $password]);
+    $user = new User(['name' => $name, 'email' => $email, 'password' => $password]);
     $user->forceFill([
         'role_id' => Role::idFor(RoleName::SuperAdmin),
         'username' => app(SlugService::class)->uniqueUsername($email),

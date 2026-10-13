@@ -229,7 +229,7 @@ php artisan test
 vendor/bin/pint
 ```
 
-The test suite (77 tests) covers registration, publisher registration/approval, product submission, approval, rejection and resubmission, product visibility, free downloads, paid orders, payment submission/approval/rejection, secure downloads and limits, role and permission authorisation, SEO output, WhatsApp links, pricing and slugs, plus a **smoke test that renders every page for every role** using the demo data. Tests run on in-memory SQLite.
+The test suite (78 tests) covers registration, publisher registration/approval, product submission, approval, rejection and resubmission, product visibility, free downloads, paid orders, payment submission/approval/rejection, secure downloads and limits, role and permission authorisation, SEO output, WhatsApp links, pricing and slugs, plus a **smoke test that renders every page for every role** using the demo data. Tests run on in-memory SQLite.
 
 ---
 

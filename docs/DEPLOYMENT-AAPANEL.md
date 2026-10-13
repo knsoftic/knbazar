@@ -15,6 +15,26 @@ Step-by-step guide for a fresh Linux server managed with **aaPanel**, using:
 
 ---
 
+## Quick install (one command)
+
+After steps **0, 1, 3** (DNS, App Store software, website + database) and the clone in **step 4**, run:
+
+```bash
+cd /www/wwwroot/website && git pull origin main && bash scripts/aapanel-install.sh
+```
+
+It asks for the database name, user and password (from aaPanel → Databases) and the Super Admin email, name and password, and does the rest:
+
+- **PHP:** enables `putenv`, `proc_open`, `proc_get_status` and `symlink`; raises the upload limits; installs `fileinfo` if it's missing; restarts PHP-FPM.
+- **Laravel setup:** writes a production `.env`, runs Composer, generates the app key and creates the database tables.
+- **Data:** seeds roles/permissions and default pages, and creates the Super Admin.
+- **Web server:** links storage, then sets the Nginx web root to `/public` with the Laravel rewrite and a 110 MB upload limit.
+- **Finish:** fixes file permissions and builds the caches.
+
+Each step is skipped when already done, so it is safe to run again. After enabling **SSL** (step 9), run the same command once more; it switches the site to `https://` automatically. The manual steps below explain everything the script does, if you prefer doing it by hand or need to troubleshoot.
+
+---
+
 ## 0. Before you start
 
 1. **DNS:** at your domain registrar, create `A` records for `knbazaar.com` and `www.knbazaar.com` pointing to the server's IP. SSL in step 9 needs them.

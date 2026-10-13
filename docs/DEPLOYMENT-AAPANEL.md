@@ -38,8 +38,22 @@ Install:
 
 ### 2.1 Install extensions (tab *Install extensions*)
 
-Install **`fileinfo`** (required: upload validation fails without it), **`opcache`** (performance), **`exif`** (auto-rotates phone photos) and **`intl`**.
+Install **`fileinfo`** (required: Composer refuses to install without it and upload validation depends on it), **`opcache`** (performance), **`exif`** (auto-rotates phone photos) and **`intl`**. Each one compiles for a few minutes.
 Already built into aaPanel's PHP: `gd` (with WebP), `mbstring`, `openssl`, `curl`, `pdo_mysql`, `zip`, `tokenizer`, `xml`, `ctype`.
+
+aaPanel uses a separate ini file for the command line (`/www/server/php/84/etc/php-cli.ini`). Check that the CLI sees the extensions:
+
+```bash
+/www/server/php/84/bin/php -m | grep -iE "fileinfo|exif|intl|gd|pdo_mysql"
+```
+
+If `fileinfo` is missing from that list even though aaPanel shows it as installed, enable it for the CLI manually:
+
+```bash
+ls /www/server/php/84/lib/php/extensions/no-debug-non-zts-*/fileinfo.so
+grep -q "fileinfo.so" /www/server/php/84/etc/php-cli.ini || echo "extension = fileinfo.so" >> /www/server/php/84/etc/php-cli.ini
+/www/server/php/84/bin/php -m | grep -i fileinfo
+```
 
 ### 2.2 Re-enable functions (tab *Disabled functions*)
 
@@ -397,6 +411,7 @@ After every deploy, run `php artisan queue:restart`.
 | `Call to undefined function proc_open()` / `putenv()` / `symlink()` | Remove them from PHP disabled functions (step 2.2) and restart PHP. |
 | `The file failed to upload` / uploads silently fail | Increase PHP limits (step 2.3) **and** Nginx `client_max_body_size` (step 2.4). |
 | **413 Request Entity Too Large** | Nginx `client_max_body_size` (step 2.4). |
+| Composer: *`requires ext-fileinfo` ... it is missing from your system* | Install `fileinfo` for PHP-8.4 and make sure the CLI loads it (step 2.1), then run `composer install` again. |
 | Uploads rejected: *"must be a file of type..."* | Install the PHP `fileinfo` extension (step 2.1); check **Admin → Settings → Uploads**. |
 | Images don't show (404 on `/storage/...`) | Run `php artisan storage:link` (or create the symlink manually, step 6). |
 | **404** on every page except the homepage | URL rewrite missing (step 8.2) or running directory not set to `/public` (step 8.1). |

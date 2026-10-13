@@ -52,6 +52,43 @@ set_env() {
 
 get_env() { { grep -E "^$1=" "$APP_DIR/.env" 2>/dev/null || true; } | head -n1 | cut -d= -f2- | sed -E "s/^['\"]//; s/['\"]$//"; }
 
+# Ask for the MySQL database details and store them in .env.
+ask_db() {
+    local current_db current_user
+    current_db="$(get_env DB_DATABASE)"; [ -z "$current_db" ] || [ "$current_db" = "laravel" ] && current_db="knbazar"
+    current_user="$(get_env DB_USERNAME)"; [ -z "$current_user" ] || [ "$current_user" = "root" ] && current_user="$current_db"
+    echo "    Copy these from aaPanel > Databases (Database name, Username and Password columns)."
+    read -rp "    Database name [$current_db]: " DB_NAME; DB_NAME="${DB_NAME:-$current_db}"
+    read -rp "    Database user [$current_user]: " DB_USER; DB_USER="${DB_USER:-$current_user}"
+    while :; do
+        read -rsp "    Database password (hidden while typing, paste is fine): " DB_PASS; echo
+        [ -z "$DB_PASS" ] && { echo "    Password cannot be empty."; continue; }
+        [[ "$DB_PASS" == *"'"* ]] && { echo "    Password must not contain a single quote ('). Change it in aaPanel and try again."; continue; }
+        break
+    done
+    set_env DB_CONNECTION mysql
+    set_env DB_HOST 127.0.0.1
+    set_env DB_PORT 3306
+    set_env DB_DATABASE "$DB_NAME"
+    set_env DB_USERNAME "$DB_USER"
+    set_env DB_PASSWORD "'$DB_PASS'"
+}
+
+# Try to connect with the .env database details (password passed via the environment, not argv).
+db_check() {
+    KNB_DB_HOST="$(get_env DB_HOST)" KNB_DB_PORT="$(get_env DB_PORT)" KNB_DB_NAME="$(get_env DB_DATABASE)" \
+    KNB_DB_USER="$(get_env DB_USERNAME)" KNB_DB_PASS="$(get_env DB_PASSWORD)" \
+    "$PHP_BIN" -r '
+        $dsn = sprintf("mysql:host=%s;port=%s;dbname=%s", getenv("KNB_DB_HOST") ?: "127.0.0.1", getenv("KNB_DB_PORT") ?: "3306", getenv("KNB_DB_NAME"));
+        try {
+            new PDO($dsn, getenv("KNB_DB_USER"), getenv("KNB_DB_PASS"), [PDO::ATTR_TIMEOUT => 5]);
+        } catch (Throwable $e) {
+            fwrite(STDERR, "    MySQL says: ".$e->getMessage()."\n");
+            exit(1);
+        }
+    '
+}
+
 [ "$(id -u)" -eq 0 ] || die "Please run as root."
 [ -x "$PHP_BIN" ] || die "PHP not found at $PHP_BIN. Install PHP-8.4 from the aaPanel App Store first (or set PHP_VER=83)."
 cd "$APP_DIR"
@@ -150,26 +187,12 @@ SCHEME="http"; SECURE="false"
 
 if [ ! -f .env ]; then
     cp .env.example .env
-    echo "    Enter the database you created in aaPanel (Databases)."
-    read -rp "    Database name [knbazar]: " DB_NAME; DB_NAME="${DB_NAME:-knbazar}"
-    read -rp "    Database user [$DB_NAME]: " DB_USER; DB_USER="${DB_USER:-$DB_NAME}"
-    while :; do
-        read -rsp "    Database password: " DB_PASS; echo
-        [ -z "$DB_PASS" ] && { echo "    Password cannot be empty."; continue; }
-        [[ "$DB_PASS" == *"'"* ]] && { echo "    Password must not contain a single quote ('). Change it in aaPanel and try again."; continue; }
-        break
-    done
+    ask_db
 
     set_env APP_ENV production
     set_env APP_DEBUG false
     set_env APP_URL "$SCHEME://$DOMAIN"
     set_env LOG_LEVEL error
-    set_env DB_CONNECTION mysql
-    set_env DB_HOST 127.0.0.1
-    set_env DB_PORT 3306
-    set_env DB_DATABASE "$DB_NAME"
-    set_env DB_USERNAME "$DB_USER"
-    set_env DB_PASSWORD "'$DB_PASS'"
     set_env SESSION_SECURE_COOKIE "$SECURE"
     set_env QUEUE_CONNECTION sync
     ok ".env created ($SCHEME://$DOMAIN)"
@@ -202,6 +225,15 @@ ok "application key set"
 # ---------------------------------------------------------------------------
 step "4/6 Database"
 # ---------------------------------------------------------------------------
+attempt=1
+until db_check; do
+    [ "$attempt" -ge 5 ] && die "Still cannot connect to MySQL. In aaPanel > Databases check the user exists, reset its password, and make sure Permission is 'Local server'. Then run this command again."
+    warn "Cannot connect with the database details in .env - please enter them again."
+    ask_db
+    attempt=$((attempt + 1))
+done
+ok "connected to MySQL database '$(get_env DB_DATABASE)' as '$(get_env DB_USERNAME)'"
+
 artisan config:clear >/dev/null
 artisan migrate --force || die "Database migration failed. Check DB_DATABASE, DB_USERNAME and DB_PASSWORD in $APP_DIR/.env (they must match aaPanel > Databases), then run again."
 artisan db:seed --class=RolePermissionSeeder --force
